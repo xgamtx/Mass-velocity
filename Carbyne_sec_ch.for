@@ -4,8 +4,6 @@
 	INTEGER, PARAMETER :: MAXSUM=50
 C	?enei aaeaiee a naoea ii R
 	INTEGER, Parameter:: NGRID = 300
-C	?enei oeiia aoiiia
-	INTEGER, Parameter:: NT = 1
 
 C	Iaeneiaeuiia cia?aiea eaaioiaiai ?enea l
 
@@ -15,44 +13,46 @@ C	INTEGER, Parameter:: NLMAX = 12
 
 	CHARACTER, PARAMETER :: JOB*1 = 'V'
 C	Constraint: JOB = 'N' or 'V'.
-	CHARACTER, PARAMETER :: UPLO*1 = 'L'
+	CHARACTER, PARAMETER :: UPLO*1 = 'U'
 
 	DOUBLE PRECISION, Parameter:: 
 	+LightSpeed = 274.0746D0
 	DOUBLE PRECISION, Parameter:: 
 	+PI = 3.14159265358979323846264338328D0
 
-	DOUBLE COMPLEX, ALLOCATABLE :: AHA(:,:), ASMALL(:,:,:,:), 
-	+BSMALL(:,:,:,:), HamAHA(:,:),WORK(:),
+	DOUBLE COMPLEX, ALLOCATABLE :: AHA(:,:), ASMALL(:,:,:,:,:), 
+	+BSMALL(:,:,:,:,:), HamAHA(:,:),WORK(:),
 	+H(:,:), BigH(:,:,:)
 
-	DOUBLE COMPLEX :: ResPoM, SIMP_I12, SUM_VAR,Element1,Element2
-	+,ResPoL, ResPoX
-	DOUBLE PRECISION :: RES(MAXSUM), A, B, C, RMT, EPSI, BESSLJ,
+	DOUBLE COMPLEX :: ResPoM, SIMP_I12,
+	+ResPoL, ResPoX, ResPoA, SUM_VAR
+	DOUBLE PRECISION :: RES(MAXSUM), A, B, C, EPSI, BESSLJ,
 	+BESSLJ1, K, Kstart, Kstop
 	DOUBLE PRECISION, ALLOCATABLE :: KAPPA(:), RAD(:,:), BigD(:,:), 
-	+RO(:), PHI(:), RSZC(:), PSIALL(:,:,:),PSIEALL(:,:,:),D(:),
+	+RO(:,:), PHI(:,:), RSZC(:,:), PSIALL(:,:,:),PSIEALL(:,:,:),D(:), 
+     +RMT(:),
 	+PSIRALL(:,:,:),PSIERALL(:,:,:), V(:,:), RWORK(:), DE(:),EBig(:,:)
-	INTEGER, ALLOCATABLE :: M(:), N(:), P(:)
-	INTEGER :: COUNTX, I, I_, JRIS, NATOMS, X, L, MSMALL, J,
-	+LENS, LENH, LEND, IT, NINTERVALS, A1, A2, A3, NPNTS, NLMAX,
-	+ II, JJ, INFO, LWORK, I1, I1_
+	INTEGER, ALLOCATABLE :: M(:), N(:), P(:), JRIS(:), NATOMS(:)
+	INTEGER :: COUNTX, I, I_, X, L, MSMALL, J,
+	+LENH, LEND, IT, NINTERVALS, NPNTS, NLMAX,
+	+ II, JJ, INFO, LWORK, I1, I1_, NT
 
-	CHARACTER(1) CHAR
+	OPEN(1, FILE = 'nt.txt', FORM = 'FORMATTED')
+	READ(1,*) NT
+      CLOSE(1)     
 
 C************************************************************************************************************
 C	 N?eouaaiea COUNTX, M, N, P
 C************************************************************************************************************
-	OPEN(1, FILE = 'indefect9.dat', FORM = 'FORMATTED')
+      OPEN(1, FILE = 'countx.txt', FORM = 'FORMATTED')
 	READ(1,*) COUNTX
 	ALLOCATE (KAPPA(COUNTX), M(COUNTX), N(COUNTX), P(COUNTX), 
 	+AHA(COUNTX,COUNTX),HamAHA(CountX, CountX),D(COUNTX))
-	READ(1,*) KAPPA
-	READ(1,*) A, B, C
+	READ(1,*) A, B, C, EPSI, NPNTS, NLMAX
 	DO I = 1, COUNTX
 		READ(1,*) M(I), N(I), P(I)
 	END DO
-	CLOSE(1)
+	close(1)
 C	Ia?aiaiiua aey aeaaiiaeecaoee
 	INFO=0
 	LWORK = 64 * CountX * 2
@@ -68,48 +68,54 @@ C*******************************************************************************
 c		WRITE(*,*) I, KAPPA(I)
 	END DO
 
-	OPEN(1, FILE = 'kStart_kStop.txt', FORM = 'FORMATTED')
+	OPEN(1, FILE = 'kstart_kstop.txt', FORM = 'FORMATTED')
 	READ(1, *) kStart, kStop
 	CLOSE(1)
 C************************************************************************************************************
 C	 N?eouaaiea JRIS-iiia? rmt a rad, RMT, RAD
 C************************************************************************************************************
-	ALLOCATE(RAD(NGRID,NT), V(NGRID,NT)) 
-	OPEN(1, FILE = 'indefect2.dat', FORM = 'FORMATTED')
-	READ(1,*) JRIS, RMT
-	READ(1,*) RAD
-c	WRITE(*,*) RAD
+	ALLOCATE(RAD(NGRID,NT), V(NGRID,NT), JRIS(NT), RMT(NT),NATOMS(NT)) 
+	OPEN(1, FILE = 'JRIS_RAD.txt', FORM = 'FORMATTED')
+	DO I=1, NT
+		READ(1,*) JRIS(I), RMT(I)
+		READ(1,*) RAD(:,I)
+	END DO
 	CLOSE(1)
 
 C************************************************************************************************************
 C	 N?eouaaiea EPSI, NATOMS
 C************************************************************************************************************
 
-	OPEN(13, FILE = 'EPSI_NATOMSG.TXT', FORM = 'FORMATTED')
-	READ(13,*) EPSI, NATOMS
+	OPEN(13, FILE = 'NATOMS.TXT', FORM = 'FORMATTED')
+	DO IT=1, NT 
+		READ(13, *) NATOMS(IT)
+	END DO
 	CLOSE(13)
 
 C	IINEA N?EOUAAIE? ?ENEA AOIIIA A YEAIAIOA?IIE ??AEEA NATOMS II?II II?AAAEEOU IANNEAU OEEEIA?E?ANEEO EII?AEIAO
 
-	ALLOCATE(RO(NATOMS), PHI(NATOMS), RSZC(NATOMS))
+	ALLOCATE(RO(MAXVAL(NATOMS),NT), PHI(MAXVAL(NATOMS),NT),
+	+RSZC(MAXVAL(NATOMS),NT))
 
 C************************************************************************************************************
 C	 N?EOUAAIEA OEEEIA?E?ANEEO EII?AEIAO, RO - RHO, PHI, RSZC - Z; 
 C************************************************************************************************************
 	
-   	OPEN(24, FILE = 'CYLINDRICALCOORDINATESG.TXT', FORM = 'FORMATTED')
-	DO I=1,NATOMS
-		READ(24, '(A1,3F20.10)') CHAR, RO(I),PHI(I),RSZC(I)
+   	OPEN(24, FILE = 'COORD.txt', FORM = 'FORMATTED')
+	DO IT = 1, NT
+		DO I=1,NATOMS(IT)
+			READ(24,'(3f10.4)')RO(I,IT),PHI(I,IT),RSZC(I,IT)
+		END DO
 	END DO
 
-	OPEN(15, FILE = 'NPNTS_LMAX_LENH_LENDG.TXT', FORM = 'FORMATTED')
-	READ(15, *) NPNTS, NLMAX, LENS, LENH, LEND
+	OPEN(15, FILE = 'LENH_LEND.txt')
+	READ(15, *) LENH, LEND
 C	NLMAX - YOI IAENEIAEUIIA CIA?AIEA L IAEAIUEIA(EAAIOIAIA ?ENEI)
 	CLOSE(15)
 	NLMAX=NLMAX-1
 	NLMAX=1
-	ALLOCATE(ASMALL(NLMAX,2*NLMAX+1,COUNTX,NPNTS),
-	+BSMALL(NLMAX,2*NLMAX+1,COUNTX,NPNTS))
+	ALLOCATE(ASMALL(NLMAX,2*NLMAX+1,COUNTX,NPNTS,NT),
+	+BSMALL(NLMAX,2*NLMAX+1,COUNTX,NPNTS,NT))
 	ALLOCATE(BIGH(NPNTS,COUNTX,COUNTX), BIGD(NPNTS,COUNTX),
 	+H(COUNTX,COUNTX),DE(CountX),
      +EBig(NPNTS,COUNTX))
@@ -117,14 +123,15 @@ C	NLMAX - YOI IAENEIAEUIIA CIA?AIEA L IAEAIUEIA(EAAIOIAIA ?ENEI)
 C************************************************************************************************************
 C	N?eouaaiea PSIALL(NT, NLMAX, EPNTS), PSIEALL(NT, NLMAX, EPNTS), PSIRALL, PSIERALL
 C************************************************************************************************************
-	ALLOCATE(PSIALL(NT,NLMAX+1,JRIS),PSIEALL(NT,NLMAX+1,JRIS),
-	+PSIRALL(NT,NLMAX+1,JRIS),PSIERALL(NT,NLMAX+1,JRIS))
-  	OPEN(1, FILE = 'indefect4.dat', FORM = 'FORMATTED')
-
+	ALLOCATE(PSIALL(NT,NLMAX+1,MAXVAL(JRIS)),
+	+PSIEALL(NT,NLMAX+1,MAXVAL(JRIS)),
+	+PSIRALL(NT,NLMAX+1,MAXVAL(JRIS)),
+     +PSIERALL(NT,NLMAX+1,MAXVAL(JRIS)))
+ 	OPEN(1, FILE = 'PSIALL.txt', FORM = 'FORMATTED')
 	DO IT = 1, NT
 		DO L = 1, NLMAX+1
-			DO X = 1, JRIS
-				READ(1, *) PSIALL(IT, L, X), A1, A2, A3
+			DO X = 1, JRIS(IT)
+				READ(1, *) PSIALL(IT, L, X)
 
 				PSIALL(IT,L,X) = PSIALL(IT, L, X)/RAD(X,1)
 			END DO
@@ -132,11 +139,11 @@ C*******************************************************************************
 	END DO
 	CLOSE(1)
 
- 	OPEN(1, FILE = 'indefect5.dat', FORM = 'FORMATTED')
+ 	OPEN(1, FILE = 'PSIEALL.txt', FORM = 'FORMATTED')
 	DO IT = 1, NT
 		DO L = 1, NLMAX+1
-			DO X = 1, JRIS
-				READ(1, *) PSIEALL(IT, L, X), A1, A2, A3
+			DO X = 1, JRIS(IT)
+				READ(1, *) PSIEALL(IT, L, X)
 
 				PSIEALL(IT, L, X)=PSIEALL(IT, L, X)/RAD(X,1)
 			END DO
@@ -146,8 +153,8 @@ C*******************************************************************************
 	OPEN(1, FILE = 'PSIRALL.TXT', FORM = 'FORMATTED')
 	DO IT = 1, NT
 		DO L = 1, NLMAX+1
-			DO X = 1, JRIS
-				READ(1, *) PSIRALL(IT, L, X), A1, A2, A3
+			DO X = 1, JRIS(IT)
+				READ(1, *) PSIRALL(IT, L, X)
 
 				PSIRALL(IT, L, X)=PSIRALL(IT, L, X)/RAD(X,1)
 			END DO
@@ -160,8 +167,8 @@ C*******************************************************************************
 	OPEN(1, FILE = 'PSIERALL.TXT', FORM = 'FORMATTED')
 	DO IT = 1, NT
 		DO L = 1, NLMAX+1
-			DO X = 1, JRIS
-				READ(1, *) PSIERALL(IT, L, X), A1, A2, A3
+			DO X = 1, JRIS(IT)
+				READ(1, *) PSIERALL(IT, L, X)
 
 				PSIERALL(IT, L, X)=PSIERALL(IT, L, X)/RAD(X,1)
 			END DO
@@ -169,12 +176,14 @@ C*******************************************************************************
 	END DO
 	CLOSE(1)
 
-	OPEN(1, FILE = 'indefect3.dat', FORM = 'FORMATTED')
+
+	OPEN(1, FILE = 'WPOT.txt', FORM = 'FORMATTED')
 	DO IT = 1, NT
 		READ(1,*) V(:,IT)
 	END DO
 	CLOSE(1)
-	OPEN(22,FILE='H_AMNPG.TXT', ACCESS = 'DIRECT',
+
+	OPEN(22,FILE='H_AMNP.TXT', ACCESS = 'DIRECT',
 	+RECL = LENH+1000)
 	DO J = 1, NPNTS
 	 READ(22, REC=J)((H(II,JJ),JJ=1,COUNTX),II=1,COUNTX)
@@ -185,180 +194,8 @@ C*******************************************************************************
 	 END DO
 	END	DO
 	CLOSE(22)
-c     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-	do J=18,35
-      open(125,FILE='temp5.txt')
-	if (J.EQ.18) then
-		DO I=1,COUNTX
-			DO I_=1,COUNTX
 
-
-			write(125,*)I,I_,DBLE(BIGH(J,I,I_)*DCONJG(BIGH(J,I,I_)))
-
-
-			end do
-		end do
-	end if
-	CLOSE(125)
-	open(125,FILE='temp6.txt')
-	if (J.EQ.19) then
-		DO I=1,COUNTX
-			DO I_=1,COUNTX
-
-
-			write(125,*)I,I_,DBLE(BIGH(J,I,I_)*DCONJG(BIGH(J,I,I_)))
-
-
-			end do
-		end do
-	end if
-	CLOSE(125)
-	open(125,FILE='temp7.txt')
-	if (J.EQ.20) then
-		DO I=1,COUNTX
-			DO I_=1,COUNTX
-
-
-			write(125,*)I,I_,DBLE(BIGH(J,I,I_)*DCONJG(BIGH(J,I,I_)))
-
-
-			end do
-		end do
-	end if
-	CLOSE(125)
-	open(125,FILE='temp8.txt')
-	if (J.EQ.21) then
-		DO I=1,COUNTX
-			DO I_=1,COUNTX
-
-
-			write(125,*)I,I_,DBLE(BIGH(J,I,I_)*DCONJG(BIGH(J,I,I_)))
-
-
-			end do
-		end do
-	end if
-	CLOSE(125)
-	open(125,FILE='temp9.txt')
-	if (J.EQ.22) then
-		DO I=1,COUNTX
-			DO I_=1,COUNTX
-
-
-			write(125,*)I,I_,DBLE(BIGH(J,I,I_)*DCONJG(BIGH(J,I,I_)))
-
-
-			end do
-		end do
-	end if
-	CLOSE(125)
-	open(125,FILE='temp10.txt')
-	if (J.EQ.23) then
-		DO I=1,COUNTX
-			DO I_=1,COUNTX
-
-
-			write(125,*)I,I_,DBLE(BIGH(J,I,I_)*DCONJG(BIGH(J,I,I_)))
-
-
-			end do
-		end do
-	end if
-	CLOSE(125)
-	open(125,FILE='temp11.txt')
-	if (J.EQ.24) then
-		DO I=1,COUNTX
-			DO I_=1,COUNTX
-
-
-			write(125,*)I,I_,DBLE(BIGH(J,I,I_)*DCONJG(BIGH(J,I,I_)))
-
-
-			end do
-		end do
-	end if
-	CLOSE(125)
-	open(125,FILE='temp12.txt')
-	if (J.EQ.25) then
-		DO I=1,COUNTX
-			DO I_=1,COUNTX
-
-
-			write(125,*)I,I_,DBLE(BIGH(J,I,I_)*DCONJG(BIGH(J,I,I_)))
-
-
-			end do
-		end do
-	end if
-	CLOSE(125)
-	open(125,FILE='temp13.txt')
-	if (J.EQ.26) then
-		DO I=1,COUNTX
-			DO I_=1,COUNTX
-
-
-			write(125,*)I,I_,DBLE(BIGH(J,I,I_)*DCONJG(BIGH(J,I,I_)))
-
-
-			end do
-		end do
-	end if
-	CLOSE(125)
-	open(125,FILE='temp14.txt')
-	if (J.EQ.27) then
-		DO I=1,COUNTX
-			DO I_=1,COUNTX
-
-
-			write(125,*)I,I_,DBLE(BIGH(J,I,I_)*DCONJG(BIGH(J,I,I_)))
-
-
-			end do
-		end do
-	end if
-	CLOSE(125)
-	open(125,FILE='temp15.txt')
-	if (J.EQ.28) then
-		DO I=1,COUNTX
-			DO I_=1,COUNTX
-
-
-			write(125,*)I,I_,DBLE(BIGH(J,I,I_)*DCONJG(BIGH(J,I,I_)))
-
-
-			end do
-		end do
-	end if
-	CLOSE(125)
-	open(125,FILE='temp16.txt')
-	if (J.EQ.29) then
-		DO I=1,COUNTX
-			DO I_=1,COUNTX
-
-
-			write(125,*)I,I_,DBLE(BIGH(J,I,I_)*DCONJG(BIGH(J,I,I_)))
-
-
-			end do
-		end do
-	end if
-	CLOSE(125)
-	open(125,FILE='temp17.txt')
-	if (J.EQ.30) then
-		DO I=1,COUNTX
-			DO I_=1,COUNTX
-
-
-			write(125,*)I,I_,DBLE(BIGH(J,I,I_)*DCONJG(BIGH(J,I,I_)))
-
-
-			end do
-		end do
-	end if
-	CLOSE(125)
-	end do
-c     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-	OPEN(23,FILE='D_ENERGIESG.TXT',
+	OPEN(23,FILE='D_ENERGIES.TXT',
 	+ACCESS = 'DIRECT', RECL = LEND+1000)
 	DO J=1, NPNTS
 	 READ(23,REC=J) D 
@@ -368,71 +205,68 @@ c     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 	END DO
 	CLOSE(23)
 C    ***************************************************?an?ao A e B iaeaiueeo************************************
-	OPEN(213, FILE='new_temp.txt')
 	DO I=1, COUNTX
 		DO L=1,NLMAX
 			DO MSMALL=-L, L
 				DO J=1, NPNTS
-
+					DO IT=1, NT
 	K=Kstart + (kStop - kStart) * (DBLE(J-1)/DBLE(NINTERVALS))
-	ASMALL(L,MSMALL+L+1,I,J)=PSIEALL(1,L+1,JRIS)*
-	+SIMP_I12(EPSI, RMT,K+(2*PI/C)*DBLE(P(I)),KAPPA(I), MSMALL,L,2)
-     +-PSIERALL(1,L+1,JRIS)*
-     +SIMP_I12(EPSI, RMT,K+(2*PI/C)*DBLE(P(I)), KAPPA(I), MSMALL,L,1)
-	BSMALL(L,MSMALL+L+1,I,J)=PSIRALL(1,L+1,JRIS)*SIMP_I12(EPSI, RMT,K+ 
-	+(2*PI/C)*DBLE(P(I)),KAPPA(I), MSMALL,L,1)-PSIALL(1,L+1,JRIS)*
-     +SIMP_I12(EPSI, RMT,K+(2*PI/C)*DBLE(P(I)), KAPPA(I), MSMALL,L,2)
+	ASMALL(L,MSMALL+L+1,I,J,IT)=PSIEALL(IT,L+1,JRIS(IT))*
+	+SIMP_I12(EPSI, RMT(IT),K+(2*PI/C)*DBLE(P(I)),KAPPA(I), MSMALL,L,2)
+     +-PSIERALL(IT,L+1,JRIS(IT))*
+     +SIMP_I12(EPSI,RMT(IT),K+(2*PI/C)*DBLE(P(I)), KAPPA(I), MSMALL,L,1)
+	BSMALL(L,MSMALL+L+1,I,J,IT)=PSIRALL(IT,L+1,JRIS(IT))*
+	+SIMP_I12(EPSI, RMT(IT),K+(2*PI/C)*DBLE(P(I)),KAPPA(I), MSMALL,L,1)
+     +-PSIALL(IT,L+1,JRIS(IT))*SIMP_I12(EPSI, RMT(IT),
+     +K+(2*PI/C)*DBLE(P(I)), KAPPA(I), MSMALL,L,2)
+					END DO
 				END DO
 			END DO
 		END DO
-		write(213,*)ASMALL(1,1,I,1),BSMALL(1,1,I,1)
 	END DO
-	close(213)
-	j=1
-	do l=1,NLMAX
-	write(*,*) '222', l, mu2(V(:,1), PSIEALL(1,L+1,:), 
-	+PSIALL(1,L+1,:),RAD(:,1),
-     +JRIS,BIGD(J,I1),BIGD(J,I1_))
-     	end do
-
 C    ********************************************** ?an?aoa AHA e BHB ********************************************
-C	WRITE(*,*) 1/(LightSpeed**2*C*A**2)
       DO J=NPNTS,1,-1
 		DO I1=1,COUNTX
- 			DO I1_=1,COUNTX
-					AHA(I1,I1_)=DCMPLX(0.0D0,0.0D0)
-		DO I=1,COUNTX
-			DO I_=1,COUNTX
-				SUM_VAR=DCMPLX(0.0d0,0.0d0)
+ 			DO I1_=I1,COUNTX
+			  AHA(I1,I1_)=DCMPLX(0.0D0,0.0D0)
+			  DO I=1,COUNTX
+			    DO I_=1,COUNTX
+				  SUM_VAR=DCMPLX(0.0d0,0.0d0)
+
 				IF (M(I).EQ.M(I_)) THEN
-					SUM_VAR=RMT**4/(LightSpeed**2*C*A**2)
+					SUM_VAR=1/(LightSpeed**2*C*A**2)
 					CALL BESS(M(I),KAPPA(I)*A,BESSLJ,BESSLJ1)
 					SUM_VAR=SUM_VAR/BESSLJ1
 					CALL BESS(M(I_),KAPPA(I_)*A,BESSLJ,BESSLJ1)
 					SUM_VAR=SUM_VAR/BESSLJ1
 					MSMALL=M(I)
+					ResPoA = dcmplx(0.0d0, 0.0d0)
+					DO IT = 1, NT
 						ResPoL=0
-					DO L=ABS(M(I)),NLMAX
-						ResPoM=0
-						DO X=1, NATOMS
-							ResPoX=
-	+mu1(V(:,1),PSIALL(1,L+1,:),RAD(:,1),JRIS,BIGD(J,I1),BIGD(J,
-     +I1_))*DCONJG(ASMALL(L,MSMALL+L+1,I,J))*ASMALL(L,MSMALL+L+1,I_,J)+
-	+mu3(V(:,1),PSIEALL(1,L+1,:),RAD(:,1),JRIS,BIGD(J,I1),BIGD(J
-     +,I1_))*DCONJG(BSMALL(L,MSMALL+L+1,I,J))*BSMALL(L,MSMALL+L+1,I_,J)
-     ++mu2(V(:,1), PSIEALL(1,L+1,:), PSIALL(1,L+1,:),RAD(:,1),
-     +JRIS,BIGD(J,I1),BIGD(J,I1_))
-	+*(DCONJG(ASMALL(L,MSMALL+L+1,I,J))*BSMALL(L,MSMALL+L+1,I_,J)+
-	+DCONJG(BSMALL(L,MSMALL+L+1,I,J))*ASMALL(L,MSMALL+L+1,I_,J))
+						DO L=ABS(M(I)),NLMAX 
+							ResPoM=0
+							DO X=1, NATOMS(IT)
+								ResPoX=
+	+mu1(V(:,IT),PSIALL(IT,L+1,:),RAD(:,IT),JRIS(IT),BIGD(J,I1),
+     +BIGD(J,I1_))*
+     +DCONJG(ASMALL(L,MSMALL+L+1,I,J,IT))*ASMALL(L,MSMALL+L+1,I_,J,IT)+
+	+mu3(V(:,IT),PSIEALL(IT,L+1,:),RAD(:,IT),JRIS(IT),BIGD(J,I1),
+     +BIGD(J,I1_))*
+     +DCONJG(BSMALL(L,MSMALL+L+1,I,J,IT))*BSMALL(L,MSMALL+L+1,I_,J,IT)+
+     +mu2(V(:,IT), PSIEALL(IT,L+1,:), PSIALL(IT,L+1,:),RAD(:,IT),
+     +JRIS(IT),BIGD(J,I1),BIGD(J,I1_))*
+	+(DCONJG(ASMALL(L,MSMALL+L+1,I,J,IT))*BSMALL(L,MSMALL+L+1,I_,J,IT)+
+	+DCONJG(BSMALL(L,MSMALL+L+1,I,J,IT))*ASMALL(L,MSMALL+L+1,I_,J,IT))
 		ResPoM=ResPoM+ResPoX*DCMPLX(DCOS((2*PI/C)*DBLE(P(I)-P(I_))*
-	+	RSZC(X)),DSIN((2*PI/C)*DBLE(P(I)-P(I_))*RSZC(X)))
-						END DO
+	+	RSZC(X,IT)),DSIN((2*PI/C)*DBLE(P(I)-P(I_))*RSZC(X,IT)))
+							END DO
 						ResPoL=ResPoL+ResPoM*(2*L+1)
 	+					*FCT(L-ABS(MSMALL))/FCT(L+ABS(MSMALL))
 						END DO
-			SUM_VAR=SUM_VAR*ResPoL
-
-					END IF					  
+					ResPoA = ResPoA + ResPoL * RMT(IT)**4
+					END DO
+				SUM_VAR = SUM_VAR * ResPoA
+				END IF					  
 				AHA(I1,I1_)=AHA(I1,I1_)-SUM_VAR*DCONJG(BIGH(J,I,I1))*
 	+			BIGH(J,I_,I1_)
 			END DO
@@ -444,13 +278,6 @@ C	WRITE(*,*) 1/(LightSpeed**2*C*A**2)
 			END DO
 		END DO
 		write(*,*)J,NPNTS
-		DO I=1,COUNTX
-			DO I_=1,COUNTX
-				if(I.LT.i_) then
-					AHA(I,I_)=dcmplx(0.0d0)
-				end if
-			END DO
-		END DO
 
 		info=0
 		CALL F02HAF(JOB,UPLO,COUNTX,AHA,COUNTX,DE,
@@ -515,8 +342,8 @@ C*******************************************************************************
 
 C	Ooieoey au?eneyao cia?aiea iiaeioaa?aeuiiai au?a?aiey Vdurddu(L,IT,i)
 
-c	pod2=GetF(E1,E2,V)*UE*U*rad**2
-	pod2=UE*U*rad
+	pod2=GetF(E1,E2,V)*UE*U*rad**2
+c	pod2=UE*U*rad
 c	Vdurddu = V(i,IT)*PSIEALL(IT, L, i)*PSIERALL(IT, L, i)*RAD(i,IT)
 
 	END FUNCTION pod2
